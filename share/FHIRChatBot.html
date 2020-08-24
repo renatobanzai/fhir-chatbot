@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <script src="jquery-3.4.1.min.js"></script>
+    <script src="jqFhir.js"></script>
+	<script src="plotly-latest.min.js"></script>
+    <!-- jQuery Modal -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.css" />
+  </head>
+  <body>
+    <h1>FHIR-ChatBot</h1>
+    <h3>
+      <a href="https://openexchange.intersystems.com/contest/current" target="_blank">If you like, please vote fhir-chatbot at openexchange.</a>
+    </h3>
+    <div>
+      <div id="chatbox">
+        <p class="botText"><span id="initial_message">Hi! I'm FHIR Chatbot!</span></p>
+      </div>
+      <div id="userInput">
+        <input id="textInput" type="text" name="msg" placeholder="Message">
+        <input id="buttonInput" type="submit" value="Send">
+      </div>
+      <script>
+        function getPatientId(rawText)
+        {
+          patient_id = -1
+          res = /patient\s+(\d+)/i.exec(rawText)
+          if(res)
+          {
+            patient_id = res[1]
+          }
+          res = /patient\s+id\s+(\d+)/i.exec(rawText)
+          if(res)
+          {
+            patient_id = res[1]
+          }
+          return patient_id
+        }
+
+        function getBasicInfo(patient_id)
+        {
+          // Instantiate a new FHIR client
+	      var client = fhir({
+		  baseUrl: '/fhir/r4',
+
+		  headers: {
+		  'Accept': 'application/fhir+json',
+		  'Content-Type': 'application/fhir+json;charset=UTF-8'
+		  }
+	      });
+          client.search({type:'Patient',
+          query: {_id: patient_id}
+          }).then(function(patients) {
+		  (patients.data.entry || []).forEach( function(patient) {
+			var botHTML = '<p class="botText"><span>' + patient.resource.name[0].given + ' ' + patient.resource.gender +'</span></p>';
+            $("#chatbox").append(botHTML);
+		  });
+		  });
+        }
+
+        function getAllPatients()
+        {
+          // Instantiate a new FHIR client
+	      var client = fhir({
+		  baseUrl: '/fhir/r4',
+
+		  headers: {
+		  'Accept': 'application/fhir+json',
+		  'Content-Type': 'application/fhir+json;charset=UTF-8'
+		  }
+	      });
+          client.search({type:'Patient'}).then(function(patients) {
+		  (patients.data.entry || []).forEach( function(patient) {
+			var botHTML = '<p class="botText"><span>id: ' + patient.resource.id + ', name: ' + patient.resource.name[0].given + '</span></p>';
+            $("#chatbox").append(botHTML);
+		  });
+		  });
+        }
+
+        function pressureHistory(patient_id)
+        {
+          getBasicInfo(patient_id)
+          // Instantiate a new FHIR client
+	      var client = fhir({
+		  baseUrl: '/fhir/r4',
+
+		  headers: {
+		  'Accept': 'application/fhir+json',
+		  'Content-Type': 'application/fhir+json;charset=UTF-8'
+		  }
+	      });
+          client.search({
+		  type:'Observation',
+		  query: {
+
+			patient: patient_id,
+			code: "85354-9", // LOINC code for pressure in Blood
+			_sort: "date",
+			_count: 5
+
+		  }}).then( function(observations) {
+
+			(observations.data.entry || []).forEach( function(observation) {
+              var date = observation.resource.effectiveDateTime.substr(0,10);
+              var value = observation.resource.component[1].valueQuantity.value + "/" + observation.resource.component[0].valueQuantity.value
+              if (date && value) {
+                var botHTML = '<p class="botText"><span>' + value + ' in ' + date + '</span></p>';
+                $("#chatbox").append(botHTML);
+              };
+            });});
+        }
+
+        function getBotResponse() {
+          /*regexes do futuro
+          group 1 id
+          group 2 propriedade a procurar
+          patient id\s(\d+)\s+(\w+)
+          */
+          var rawText = $("#textInput").val();
+          var loginText = $("#txt_login").val();
+          var languageText = $("#ddl_country").val();
+          var userHtml = '<p class="userText"><span>' + rawText + '</span></p>';
+          $("#textInput").val("");
+          $("#chatbox").append(userHtml);
+
+
+          patient_id = getPatientId(rawText);
+          if (patient_id > 0)
+          {
+            res = /(bloods?)?\s+pressure\s+history/i.exec(rawText);
+            if(res)
+              pressureHistory(patient_id);
+          }
+          else
+          {
+            res = /(get\s+|list\s+)?all\s+patients?/i.exec(rawText);
+            if(res)
+              getAllPatients();
+            else
+              var botHTML = '<p class="botText"><span>Sorry! Still learning</span></p>';
+                $("#chatbox").append(botHTML);
+          }
+        }
+        $("#textInput").keypress(function(e) {
+            if(e.which == 13) {
+                getBotResponse();
+            }
+        });
+        $("#buttonInput").click(function() {
+          getBotResponse();
+        })
+
+      </script>
+    </div>
+  </body>
+</html>
