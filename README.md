@@ -8,7 +8,7 @@ Using InterSystems Iris for Health FHIR to create a chatbot assistant to query h
 
 ### Demo
 I have deployed the trained model as a demo here:
-[http://fhir-chatbot.eastus.cloudapp.azure.com/](http://fhir-chatbot.eastus.cloudapp.azure.com/)
+[http://fhir-chatbot.eastus.cloudapp.azure.com:32783/csp/user/fhirUI/share/FHIRChatBot.html](http://fhir-chatbot.eastus.cloudapp.azure.com:32783/csp/user/fhirUI/share/FHIRChatBot.html)
 
 ## Using the demo
 
