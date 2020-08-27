@@ -18,7 +18,9 @@ list all patients
 or
 get all patients
 
-Once you have an patient id, you can list the blood pressure history of this one. 
+Once you have an patient id, you can list the blood pressure history of this one.
+
+** Please, delete all cache content from your webbrowser to get the latest version of FHIR ChatBot. 
 
 ## Getting started
 
