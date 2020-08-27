@@ -23,6 +23,18 @@
         <input id="buttonInput" type="submit" value="Send">
       </div>
       <script>
+      var response_count = 0
+      // Instantiate a new FHIR client
+	      var client = fhir({
+		  baseUrl: '/fhir/r4',
+
+		  headers: {
+		  'Accept': 'application/fhir+json',
+		  'Content-Type': 'application/fhir+json;charset=UTF-8'
+		  }
+	      });
+
+
         function getPatientId(rawText)
         {
           patient_id = -1
@@ -41,15 +53,6 @@
 
         function getBasicInfo(patient_id)
         {
-          // Instantiate a new FHIR client
-	      var client = fhir({
-		  baseUrl: '/fhir/r4',
-
-		  headers: {
-		  'Accept': 'application/fhir+json',
-		  'Content-Type': 'application/fhir+json;charset=UTF-8'
-		  }
-	      });
           client.search({type:'Patient',
           query: {_id: patient_id}
           }).then(function(patients) {
@@ -62,15 +65,6 @@
 
         function getAllPatients()
         {
-          // Instantiate a new FHIR client
-	      var client = fhir({
-		  baseUrl: '/fhir/r4',
-
-		  headers: {
-		  'Accept': 'application/fhir+json',
-		  'Content-Type': 'application/fhir+json;charset=UTF-8'
-		  }
-	      });
           client.search({type:'Patient'}).then(function(patients) {
 		  (patients.data.entry || []).forEach( function(patient) {
 			var botHTML = '<p class="botText"><span>id: ' + patient.resource.id + ', name: ' + patient.resource.name[0].given + '</span></p>';
@@ -79,40 +73,120 @@
 		  });
         }
 
-        function pressureHistory(patient_id)
+        function pressureHistory(patient_id, chartDivID)
         {
-          getBasicInfo(patient_id)
-          // Instantiate a new FHIR client
-	      var client = fhir({
-		  baseUrl: '/fhir/r4',
+          client.search({type:'Patient',
+          query: {_id: patient_id}
+          }).then(function(patients) {
+		  (patients.data.entry || []).forEach( function(patient) {
+			var botHTML = '<p class="botText"><span>' + patient.resource.name[0].given + ' ' + patient.resource.gender +'</span></p>';
+            $("#chatbox").append(botHTML);
+            plotPressureHistory(patient_id, chartDivID);
+		  });
+		  });
+        }
 
-		  headers: {
-		  'Accept': 'application/fhir+json',
-		  'Content-Type': 'application/fhir+json;charset=UTF-8'
-		  }
-	      });
-          client.search({
+        // Function for plotting observation values on a chart. Gets invoked when Submit is clicked.
+	  function plotHemoglobin(patientId, chartDivID) {
+        var botHTML = '<div id="' + chartDivID + '"></div>';
+        $("#chatbox").append(botHTML);
+        chartDiv = document.getElementById(chartDivID)
+		// Perform a search to retrieve all hemoglobin measurements for a given patient
+		client.search({
 		  type:'Observation',
 		  query: {
 
-			patient: patient_id,
-			code: "85354-9", // LOINC code for pressure in Blood
-			_sort: "date",
-			_count: 5
+			patient: patientId,
+			code: "718-7", // LOINC code for Hemoglobin in Blood (g/dL)
+			_sort: "date"
 
 		  }}).then( function(observations) {
 
-			(observations.data.entry || []).forEach( function(observation) {
-              var date = observation.resource.effectiveDateTime.substr(0,10);
-              var value = observation.resource.component[1].valueQuantity.value + "/" + observation.resource.component[0].valueQuantity.value
-              if (date && value) {
-                var botHTML = '<p class="botText"><span>' + value + ' in ' + date + '</span></p>';
-                $("#chatbox").append(botHTML);
-              };
-            });});
-        }
+            var dates = [];
+            var values = [];
 
-        function getBotResponse() {
+			(observations.data.entry || []).forEach( function(observation) {
+              var date = observation.resource.effectiveDateTime;
+              var value = observation.resource.valueQuantity && observation.resource.valueQuantity.value;
+              if (date && value && dates.indexOf(date) == -1) {
+                dates.push(date);
+                values.push(value);
+              };
+            });
+
+            Plotly.newPlot(chartDiv, {
+              data: [{
+                x: dates,
+                y: values,
+                type: "scatter"
+              }],
+              layout: {
+                xaxis: {type: "date", tickformat: "%b %Y"},
+                yaxis: {range: [5,20]} // range from 5g/dL to 20g/dL
+              },
+              config: {
+                displayModeBar: false
+              }
+            });
+          });
+	  }
+
+	  // Function for plotting observation values on a chart. Gets invoked when Submit is clicked.
+	  function plotPressureHistory(patientId, chartDivID) {
+        var botHTML = '<div id="' + chartDivID + '"></div>';
+        $("#chatbox").append(botHTML);
+        chartDiv = document.getElementById(chartDivID)
+		// Perform a search to retrieve all hemoglobin measurements for a given patient
+		client.search({
+		  type:'Observation',
+		  query: {
+
+			patient: patientId,
+			code: "85354-9", // LOINC code for pressure in Blood
+			_sort: "date"
+
+		  }}).then( function(observations) {
+
+            var dates = [];
+            var values = [];
+            var values_2 = [];
+
+			(observations.data.entry || []).forEach( function(observation) {
+              var date = observation.resource.effectiveDateTime;
+              var value = observation.resource.component[1].valueQuantity.value + "/" + observation.resource.component[0].valueQuantity.value;
+              if (date && value) {
+                dates.push(date);
+                values.push(observation.resource.component[1].valueQuantity.value);
+                values_2.push(observation.resource.component[0].valueQuantity.value);
+              };
+            });
+
+            Plotly.newPlot(chartDiv, {
+              data: [{
+                x: dates,
+                y: values,
+                type: "scatter",
+                name: "systolic"
+              }, {
+                x: dates,
+                y: values_2,
+                type: "scatter",
+                name: "diastolic"
+              }],
+              layout: {
+                xaxis: {type: "date", tickformat: "%b %Y"},
+                yaxis: {range: [0,200]} //
+              },
+              config: {
+                displayModeBar: false
+              }
+            });
+          });
+	  }
+
+      function getBotResponse() {
+          response_count = response_count + 1
+
           /*regexes do futuro
           group 1 id
           group 2 propriedade a procurar
@@ -131,7 +205,14 @@
           {
             res = /(bloods?)?\s+pressure\s+history/i.exec(rawText);
             if(res)
-              pressureHistory(patient_id);
+              pressureHistory(patient_id, "div_chart" + response_count);
+            res = /hemoglobins?\shistory/i.exec(rawText);
+            if(res)
+              plotHemoglobin(patient_id, "div_chart" + response_count);
+
+            res = /gender/i.exec(rawText);
+            if(res)
+              getBasicInfo(patient_id);
           }
           else
           {
